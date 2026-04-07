@@ -337,7 +337,7 @@ class Cursor(AbstractAsyncContextManager):
     def __aiter__(self) -> "Self":
         return self
 
-    async def __anext__(self):
+    async def __anext__(self) -> Any:
         ret = await self.fetchone()
         if ret is not None:
             return ret

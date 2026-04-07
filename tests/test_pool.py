@@ -291,7 +291,7 @@ async def test_true_parallel_tasks(pool_maker, dsn):
     maxsize = 0
     minfreesize = 100
 
-    async def inner():
+    async def inner() -> None:
         nonlocal maxsize, minfreesize
         maxsize = max(maxsize, pool.size)
         minfreesize = min(minfreesize, pool.freesize)
@@ -335,14 +335,14 @@ async def test_wait_closed(pool_maker, dsn):
 
     ops = []
 
-    async def do_release(conn):
+    async def do_release(conn: Connection) -> None:
         await asyncio.sleep(
             0,
         )
         await pool.release(conn)
         ops.append("release")
 
-    async def wait_closed():
+    async def wait_closed() -> None:
         await pool.wait_closed()
         ops.append("wait_closed")
 
@@ -456,13 +456,13 @@ async def test_all_context_managers(dsn, executor):
                 assert (1,) == tuple(val)
 
     assert pool.closed
-    assert conn.closed
+    assert conn.closed  # type: ignore[unreachable]
     assert cur.closed
 
 
 @pytest.mark.asyncio
 async def test_context_manager_aexit(connection_maker):
-    async def aexit_conntex_managet(conn):
+    async def aexit_conntex_managet(conn: Connection) -> None:
         # commit on exit if no error
         params = (1, "123.45")
         async with conn.cursor() as cur:

@@ -4,7 +4,7 @@ import asyncio
 import sys
 import traceback
 import warnings
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from functools import partial
 from typing import TYPE_CHECKING, ParamSpec, TypeVar
@@ -34,7 +34,7 @@ def connect(
     echo=False,
     after_created=None,
     **kwargs,
-) -> Awaitable[Connection]:
+) -> _ConnectionContextManager:
     """Accepts an ODBC connection string and returns a new Connection object.
 
     The connection string can be passed as the string `str`, as a list of
@@ -201,7 +201,7 @@ class Connection(AbstractAsyncContextManager):
         self._last_usage = self._loop.time()
         return Cursor(c, self, echo=self._echo)
 
-    def cursor(self) -> _ContextManager:
+    def cursor(self) -> _ContextManager[Cursor]:
         return _ContextManager(self._cursor())
 
     async def close(self) -> None:

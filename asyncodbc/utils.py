@@ -1,6 +1,6 @@
 from collections.abc import Coroutine, Generator, Iterator
 from types import CodeType, FrameType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from pyodbc import Error
 
@@ -35,12 +35,15 @@ def _is_conn_close_error(e: Any) -> bool:
     return msg.startswith(check_msg)
 
 
-class _ContextManager(Coroutine):
+T = TypeVar("T")
+
+
+class _ContextManager(Coroutine, Generic[T]):
     __slots__ = ("_coro", "_obj")
 
-    def __init__(self, coro: Coroutine) -> None:
+    def __init__(self, coro: Coroutine[Any, Any, T]) -> None:
         self._coro = coro
-        self._obj: Any = None
+        self._obj: T | None = None
 
     def send(self, value: Any) -> Any:
         return self._coro.send(value)
@@ -74,35 +77,35 @@ class _ContextManager(Coroutine):
     def __iter__(self) -> Iterator[Any]:
         return self._coro.__await__()
 
-    def __await__(self) -> Generator[Any]:
+    def __await__(self) -> Generator[Any, Any, T]:
         return self._coro.__await__()
 
-    async def __aenter__(self) -> Any:
+    async def __aenter__(self) -> T:
         self._obj = await self._coro
         return self._obj
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
-        await self._obj.close()
+        await self._obj.close()  # type: ignore[union-attr]
         self._obj = None
 
 
-class _PoolContextManager(_ContextManager):
+class _PoolContextManager(_ContextManager["Pool"]):
     async def __aexit__(self, exc_type, exc, tb) -> None:
-        self._obj.close()
-        await self._obj.wait_closed()
+        self._obj.close()  # type: ignore[union-attr]
+        await self._obj.wait_closed()  # type: ignore[union-attr]
         self._obj = None
 
 
-class _PoolAcquireContextManager(_ContextManager):
+class _PoolAcquireContextManager(_ContextManager["Connection"]):
     __slots__ = ("_coro", "_conn", "_pool")
 
-    def __init__(self, coro: Coroutine, pool: "Pool") -> None:
+    def __init__(self, coro: Coroutine[Any, Any, "Connection"], pool: "Pool") -> None:
         super().__init__(coro)
         self._coro = coro
         self._conn: Connection | None = None
         self._pool: Pool | None = pool
 
-    async def __aenter__(self) -> Any:
+    async def __aenter__(self) -> "Connection":
         self._conn = await self._coro
         return self._conn
 
@@ -115,7 +118,7 @@ class _PoolAcquireContextManager(_ContextManager):
             self._conn = None
 
 
-class _ConnectionContextManager(_ContextManager):
+class _ConnectionContextManager(_ContextManager["Connection"]):
     async def __aexit__(self, exc_type, exc, tb) -> None:
-        await self._obj.close()
+        await self._obj.close()  # type: ignore[union-attr]
         self._obj = None

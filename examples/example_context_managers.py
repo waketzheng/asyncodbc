@@ -3,7 +3,7 @@ import asyncio
 import asyncodbc
 
 
-async def example():
+async def example() -> None:
     dsn = "Driver=SQLite;Database=sqlite.db"
 
     async with asyncodbc.create_pool(dsn=dsn) as pool:

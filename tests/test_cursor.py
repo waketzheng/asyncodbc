@@ -84,7 +84,7 @@ async def test_description(conn):
     await cur.execute("SELECT 1;")
     expected = (("", int, None, 10, 10, 0, False),)
     assert cur.description == expected
-    await cur.close()
+    await cur.close()  # type: ignore[unreachable]
 
 
 @pytest.mark.asyncio

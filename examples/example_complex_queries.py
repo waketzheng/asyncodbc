@@ -11,7 +11,7 @@ dsn = "Driver=SQLite;Database=sqlite.db"
 connect = partial(asyncodbc.connect, dsn=dsn, echo=True, autocommit=True)
 
 
-async def init_database():
+async def init_database() -> None:
     """
     Initialize test database with sample schema/data to reuse in other tests.
     Make sure that in real applications you have database initialization
@@ -24,7 +24,7 @@ async def init_database():
             await cur.execute(sql)
 
 
-async def error_without_context_managers():
+async def error_without_context_managers() -> None:
     """
     When not using context manager you may end up having unclosed connections
     in case of any error which lead to resource leakage. To avoid
@@ -44,7 +44,7 @@ async def error_without_context_managers():
         await conn.close()
 
 
-async def insert_with_values():
+async def insert_with_values() -> None:
     """
     When providing data to your SQL statement make sure to parametrize it with
     question marks placeholders. Do not use string formatting or make sure
@@ -68,7 +68,7 @@ async def insert_with_values():
             print(result[0])
 
 
-async def commit():
+async def commit() -> None:
     """
     When not using `autocommit` parameter do not forget to explicitly call
     this method for your changes to persist within database.

@@ -3,7 +3,7 @@ import asyncio
 import asyncodbc
 
 
-async def example():
+async def example() -> None:
     dsn = "Driver=SQLite;Database=sqlite.db"
     conn = await asyncodbc.connect(
         dsn=dsn,

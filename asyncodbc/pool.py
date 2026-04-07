@@ -1,6 +1,5 @@
 import asyncio
 import collections
-from collections.abc import Awaitable
 from typing import cast
 
 from .connection import Connection, connect
@@ -9,7 +8,9 @@ from .utils import _PoolAcquireContextManager, _PoolContextManager
 __all__ = ["create_pool", "Pool"]
 
 
-def create_pool(minsize=1, maxsize=10, echo=False, pool_recycle=-1, **kwargs) -> Awaitable["Pool"]:
+def create_pool(
+    minsize=1, maxsize=10, echo=False, pool_recycle=-1, **kwargs
+) -> _PoolContextManager:
     return _PoolContextManager(
         _create_pool(
             minsize=minsize, maxsize=maxsize, echo=echo, pool_recycle=pool_recycle, **kwargs

@@ -3,7 +3,7 @@ import asyncio
 import asyncodbc
 
 
-async def pool():
+async def pool() -> None:
     dsn = "Driver=SQLite;Database=sqlite.db"
     pool = await asyncodbc.create_pool(dsn=dsn)
 
