@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import Callable, Coroutine
 from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -32,7 +34,7 @@ class Cursor(AbstractAsyncContextManager):
     the other cursors.
     """
 
-    def __init__(self, pyodbc_cursor, connection: "Connection", echo=False) -> None:
+    def __init__(self, pyodbc_cursor, connection: Connection, echo=False) -> None:
         self._conn: Connection | None = connection
         self._impl = pyodbc_cursor
         self._loop = connection.loop
@@ -57,7 +59,7 @@ class Cursor(AbstractAsyncContextManager):
         return self._echo
 
     @property
-    def connection(self) -> "Connection":
+    def connection(self) -> Connection:
         """Cursors database connection"""
         if self._conn is None:
             raise pyodbc.OperationalError("Cursor is closed.")
@@ -130,7 +132,7 @@ class Cursor(AbstractAsyncContextManager):
         await self._run_operation(self._impl.close)
         self._conn = None
 
-    async def execute(self, sql, *params) -> "Self":
+    async def execute(self, sql, *params) -> Self:
         """Executes the given operation substituting any markers with
         the given parameters.
 
@@ -334,7 +336,7 @@ class Cursor(AbstractAsyncContextManager):
         fut: Coroutine = self._run_operation(self._impl.rollback)
         return fut
 
-    def __aiter__(self) -> "Self":
+    def __aiter__(self) -> Self:
         return self
 
     async def __anext__(self) -> Any:

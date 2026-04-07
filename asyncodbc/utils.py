@@ -1,10 +1,13 @@
+from __future__ import annotations
+
 from collections.abc import Coroutine, Generator, Iterator
-from types import CodeType, FrameType
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from pyodbc import Error
 
 if TYPE_CHECKING:
+    from types import CodeType, FrameType
+
     from .connection import Connection
     from .pool import Pool
 
@@ -99,13 +102,13 @@ class _PoolContextManager(_ContextManager["Pool"]):
 class _PoolAcquireContextManager(_ContextManager["Connection"]):
     __slots__ = ("_coro", "_conn", "_pool")
 
-    def __init__(self, coro: Coroutine[Any, Any, "Connection"], pool: "Pool") -> None:
+    def __init__(self, coro: Coroutine[Any, Any, Connection], pool: Pool) -> None:
         super().__init__(coro)
         self._coro = coro
         self._conn: Connection | None = None
         self._pool: Pool | None = pool
 
-    async def __aenter__(self) -> "Connection":
+    async def __aenter__(self) -> Connection:
         self._conn = await self._coro
         return self._conn
 
