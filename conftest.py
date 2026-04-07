@@ -1,12 +1,19 @@
 import asyncio
 import os
 import uuid
+from collections.abc import AsyncGenerator, Callable
 from concurrent.futures import ThreadPoolExecutor
+from typing import TYPE_CHECKING
 
 import pytest
 import pytest_asyncio
 
 import asyncodbc
+
+if TYPE_CHECKING:
+    from asyncio.events import AbstractEventLoop
+
+    from asyncodbc.connection import Connection
 
 
 @pytest_asyncio.fixture
@@ -18,7 +25,7 @@ async def conn(connection_maker, database):
 
 
 @pytest.fixture(scope="session")
-def event_loop():
+def event_loop() -> AbstractEventLoop:
     return asyncio.get_event_loop()
 
 
@@ -33,11 +40,11 @@ async def database():
 
 
 @pytest.fixture
-async def connection_maker(dsn, database):
+async def connection_maker(dsn, database) -> AsyncGenerator[Callable[..., "Connection"]]:
     cleanup = []
 
     async def make(**kw):
-        if kw.get("executor", None) is None:
+        if kw.get("executor") is None:
             executor = ThreadPoolExecutor(max_workers=1)
             kw["executor"] = executor
         else:

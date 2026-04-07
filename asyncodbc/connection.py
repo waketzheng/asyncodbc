@@ -1,15 +1,27 @@
+from __future__ import annotations
+
 import asyncio
 import sys
 import traceback
 import warnings
+from collections.abc import Awaitable, Callable
+from contextlib import AbstractAsyncContextManager
 from functools import partial
+from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
 import pyodbc
 
 from .cursor import Cursor
 from .utils import _ConnectionContextManager, _ContextManager, _is_conn_close_error
 
+if TYPE_CHECKING:
+    from asyncio import Future
+    from asyncio.events import AbstractEventLoop
+
 __all__ = ["connect", "Connection"]
+
+P = ParamSpec("P")
+T = TypeVar("T")
 
 
 def connect(
@@ -22,7 +34,7 @@ def connect(
     echo=False,
     after_created=None,
     **kwargs,
-):
+) -> Awaitable[Connection]:
     """Accepts an ODBC connection string and returns a new Connection object.
 
     The connection string can be passed as the string `str`, as a list of
@@ -68,7 +80,7 @@ async def _connect(
     echo=False,
     after_created=None,
     **kwargs,
-):
+) -> Connection:
     conn = Connection(
         dsn=dsn,
         autocommit=autocommit,
@@ -83,7 +95,7 @@ async def _connect(
     return conn
 
 
-class Connection:
+class Connection(AbstractAsyncContextManager):
     """Connection objects manage connections to the database.
 
     Connections should only be created by the asyncodbc.connect function.
@@ -102,10 +114,10 @@ class Connection:
         echo=False,
         after_created=None,
         **kwargs,
-    ):
+    ) -> None:
         self._executor = executor
         self._loop = asyncio.get_event_loop()
-        self._conn = None
+        self._conn: pyodbc.Connection | None = None
         self._expired = False
         self._timeout = timeout
         self._last_usage = self._loop.time()
@@ -119,15 +131,15 @@ class Connection:
         if self.loop.get_debug():
             self._source_traceback = traceback.extract_stack(sys._getframe(1))
 
-    def _execute(self, func, *args, **kwargs):
+    def _execute(self, func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> Future[T]:
         # execute function with args and kwargs in thread pool
         func = partial(func, *args, **kwargs)
         future = asyncio.get_event_loop().run_in_executor(self._executor, func)
         return future
 
-    async def _connect(self):
+    async def _connect(self) -> None:
         # create pyodbc connection
-        f = self._execute(
+        f: Future[pyodbc.Connection] = self._execute(
             pyodbc.connect,
             self._dsn,
             autocommit=self._autocommit,
@@ -141,72 +153,77 @@ class Connection:
             await self._posthook(self._conn)
 
     @property
-    def connected(self):
+    def connected(self) -> bool:
         return self._connected
 
     @property
-    def expired(self):
+    def pyodbc_conn(self) -> pyodbc.Connection:
+        if self._conn is None:
+            raise RuntimeError(f"{self} not inited!")
+        return self._conn
+
+    @property
+    def expired(self) -> bool:
         return self._expired
 
     @property
-    def loop(self):
+    def loop(self) -> AbstractEventLoop:
         return self._loop
 
     @property
-    def closed(self):
+    def closed(self) -> bool:
         if self._conn:
             return False
         return True
 
     @property
-    def autocommit(self):
+    def autocommit(self) -> bool:
         """Show autocommit mode for current database session. True if the
         connection is in autocommit mode; False otherwise. The default
         is False
         """
-        return self._conn.autocommit
+        return self.pyodbc_conn.autocommit
 
     @property
-    def timeout(self):
-        return self._conn.timeout
+    def timeout(self) -> int:
+        return self.pyodbc_conn.timeout
 
     @property
-    def last_usage(self):
+    def last_usage(self) -> float:
         return self._last_usage
 
     @property
-    def echo(self):
+    def echo(self) -> bool:
         return self._echo
 
-    async def _cursor(self):
-        c = await self._execute(self._conn.cursor)
+    async def _cursor(self) -> Cursor:
+        c: pyodbc.Cursor = await self._execute(self.pyodbc_conn.cursor)
         self._last_usage = self._loop.time()
         return Cursor(c, self, echo=self._echo)
 
-    def cursor(self):
+    def cursor(self) -> _ContextManager:
         return _ContextManager(self._cursor())
 
-    async def close(self):
+    async def close(self) -> None:
         """Close pyodbc connection"""
         if not self._conn:
             return
-        c = await self._execute(self._conn.close)
+        await self._execute(self._conn.close)
         self._conn = None
-        return c
 
-    def commit(self):
+    def commit(self) -> Future:
         """Commit any pending transaction to the database."""
-        fut = self._execute(self._conn.commit)
+        fut: Future = self._execute(self.pyodbc_conn.commit)
         return fut
 
-    def rollback(self):
+    def rollback(self) -> Future:
         """Causes the database to roll back to the start of any pending
         transaction.
         """
-        fut = self._execute(self._conn.rollback)
+        fut: Future = self._execute(self.pyodbc_conn.rollback)
         return fut
 
-    async def execute(self, sql, *args):
+    async def execute(self, sql, *args) -> Cursor:
         """Create a new Cursor object, call its execute method, and return it.
 
         See Cursor.execute for more details.This is a convenience method
@@ -217,7 +234,9 @@ class Connection:
         :raises pyodbc.Error: When an error is encountered during execution
         """
         try:
-            _cursor = await self._execute(self._conn.execute, sql, *args)
+            _cursor: Future[pyodbc.Cursor] = await self._execute(
+                self.pyodbc_conn.execute, sql, *args
+            )
             connection = self
             cursor = Cursor(_cursor, connection, echo=self._echo)
             return cursor
@@ -226,7 +245,7 @@ class Connection:
                 await self.close()
             raise
 
-    def getinfo(self, type_):
+    def getinfo(self, type_) -> Future:
         """Returns general information about the driver and data source
         associated with a connection by calling SQLGetInfo and returning its
         results. See Microsoft's SQLGetInfo documentation for the types of
@@ -234,10 +253,10 @@ class Connection:
 
         :param type_: int, pyodbc.SQL_* constant
         """
-        fut = self._execute(self._conn.getinfo, type_)
+        fut: Future = self._execute(self.pyodbc_conn.getinfo, type_)
         return fut
 
-    def add_output_converter(self, sqltype, func):
+    def add_output_converter(self, sqltype, func) -> Future[None]:
         """Register an output converter function that will be called whenever
         a value with the given SQL type is read from the database.
 
@@ -250,17 +269,17 @@ class Connection:
             value. If the value is NULL, the parameter will be None.
             Otherwise it will be a Python string.
         """
-        fut = self._execute(self._conn.add_output_converter, sqltype, func)
+        fut: Future[None] = self._execute(self.pyodbc_conn.add_output_converter, sqltype, func)
         return fut
 
-    def clear_output_converters(self):
+    def clear_output_converters(self) -> Future[None]:
         """Remove all output converter functions added by
         add_output_converter.
         """
-        fut = self._execute(self._conn.clear_output_converters)
+        fut: Future[None] = self._execute(self.pyodbc_conn.clear_output_converters)
         return fut
 
-    def set_attr(self, attr_id, value):
+    def set_attr(self, attr_id: int, value: int) -> Future[None]:
         """Calls SQLSetConnectAttr with the given values.
 
         param attr_id: the attribute ID (integer) to set. These are ODBC or
@@ -268,26 +287,23 @@ class Connection:
         param value: the connection attribute value to set. At this time
             only integer values are supported.
         """
-        fut = self._execute(self._conn.set_attr, attr_id, value)
+        fut: Future[None] = self._execute(self.pyodbc_conn.set_attr, attr_id, value)
         return fut
 
-    def __del__(self):
+    def __del__(self) -> None:
         if not self.closed:
             # This will block the loop, please use close
             # coroutine to close connection
-            self._conn.close()
-            self._conn = None
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None
 
-            warnings.warn(f"Unclosed connection {self!r}", ResourceWarning)
+            warnings.warn(f"Unclosed connection {self!r}", ResourceWarning, stacklevel=2)
 
             context = {"connection": self, "message": "Unclosed connection"}
             if self._source_traceback is not None:
                 context["source_traceback"] = self._source_traceback
             self._loop.call_exception_handler(context)
 
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         await self.close()
-        return

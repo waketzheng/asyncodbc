@@ -1,12 +1,29 @@
+from collections.abc import Callable, Coroutine
+from contextlib import AbstractAsyncContextManager
+from typing import TYPE_CHECKING, Any, TypeVar
+
 import pyodbc
 
 from .log import logger
-from .utils import PY_352, _is_conn_close_error
+from .utils import _is_conn_close_error
+
+if TYPE_CHECKING:
+    import sys
+
+    from .connection import Connection
+
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing_extensions import Self
 
 __all__ = ["Cursor"]
 
+T = TypeVar("T")
+SyncFunc = Callable[..., T]
 
-class Cursor:
+
+class Cursor(AbstractAsyncContextManager):
     """Cursors represent a database cursor (and map to ODBC HSTMTs), which
     is used to manage the context of a fetch operation.
 
@@ -15,13 +32,13 @@ class Cursor:
     the other cursors.
     """
 
-    def __init__(self, pyodbc_cursor, connection, echo=False):
-        self._conn = connection
+    def __init__(self, pyodbc_cursor, connection: "Connection", echo=False) -> None:
+        self._conn: Connection | None = connection
         self._impl = pyodbc_cursor
         self._loop = connection.loop
         self._echo = echo
 
-    async def _run_operation(self, func, *args, **kwargs):
+    async def _run_operation(self, func: SyncFunc, *args, **kwargs) -> T:
         # execute func in thread pool of attached to cursor connection
         if not self._conn:
             raise pyodbc.OperationalError("Cursor is closed.")
@@ -35,25 +52,27 @@ class Cursor:
             raise
 
     @property
-    def echo(self):
+    def echo(self) -> bool:
         """Return echo mode status."""
         return self._echo
 
     @property
-    def connection(self):
+    def connection(self) -> "Connection":
         """Cursors database connection"""
+        if self._conn is None:
+            raise pyodbc.OperationalError("Cursor is closed.")
         return self._conn
 
     @property
-    def autocommit(self):
+    def autocommit(self) -> bool:
         """Show autocommit mode for current database session. True if
         connection is in autocommit mode; False otherwse. The default
         is False.
         """
-        return self._conn.autocommit
+        return self.connection.autocommit
 
     @property
-    def rowcount(self):
+    def rowcount(self) -> int:
         """The number of rows modified by the previous DDL statement.
 
         This is -1 if no SQL has been executed or if the number of rows is
@@ -65,7 +84,7 @@ class Cursor:
         return self._impl.rowcount
 
     @property
-    def description(self):
+    def description(self) -> list:
         """This read-only attribute is a list of 7-item tuples, each
         containing (name, type_code, display_size, internal_size, precision,
         scale, null_ok).
@@ -83,12 +102,12 @@ class Cursor:
         return self._impl.description
 
     @property
-    def closed(self):
+    def closed(self) -> bool:
         """Read only property indicates if cursor has been closed"""
         return self._conn is None
 
     @property
-    def arraysize(self):
+    def arraysize(self) -> int:
         """This read/write attribute specifies the number of rows to fetch
         at a time with .fetchmany() . It defaults to 1 meaning to fetch a
         single row at a time.
@@ -96,10 +115,10 @@ class Cursor:
         return self._impl.arraysize
 
     @arraysize.setter
-    def arraysize(self, size):
+    def arraysize(self, size: int) -> None:
         self._impl.arraysize = size
 
-    async def close(self):
+    async def close(self) -> None:
         """Close the cursor now (rather than whenever __del__ is called).
 
         The cursor will be unusable from this point forward; an Error
@@ -111,7 +130,7 @@ class Cursor:
         await self._run_operation(self._impl.close)
         self._conn = None
 
-    async def execute(self, sql, *params):
+    async def execute(self, sql, *params) -> "Self":
         """Executes the given operation substituting any markers with
         the given parameters.
 
@@ -128,38 +147,38 @@ class Cursor:
         await self._run_operation(self._impl.execute, sql, *params)
         return self
 
-    def executemany(self, sql, *params):
+    def executemany(self, sql: str, *params: Any) -> Coroutine:
         """Prepare a database query or command and then execute it against
         all parameter sequences  found in the sequence seq_of_params.
 
         :param sql: the SQL statement to execute with optional ? parameters
         :param params: sequence parameters for the markers in the SQL.
         """
-        fut = self._run_operation(self._impl.executemany, sql, *params)
+        fut: Coroutine = self._run_operation(self._impl.executemany, sql, *params)
         return fut
 
     def callproc(self, procname, args=()):
         raise NotImplementedError
 
-    async def setinputsizes(self, *args, **kwargs):
+    async def setinputsizes(self, *args, **kwargs) -> None:
         """Does nothing, required by DB API."""
         return None
 
-    async def setoutputsize(self, *args, **kwargs):
+    async def setoutputsize(self, *args, **kwargs) -> None:
         """Does nothing, required by DB API."""
         return None
 
-    def fetchone(self):
+    def fetchone(self) -> Coroutine:
         """Returns the next row or None when no more data is available.
 
         A ProgrammingError exception is raised if no SQL has been executed
         or if it did not return a result set (e.g. was not a SELECT
         statement).
         """
-        fut = self._run_operation(self._impl.fetchone)
+        fut: Coroutine = self._run_operation(self._impl.fetchone)
         return fut
 
-    def fetchall(self):
+    def fetchall(self) -> Coroutine:
         """Returns a list of all remaining rows.
 
         Since this reads all rows into memory, it should not be used if
@@ -170,10 +189,10 @@ class Cursor:
         A ProgrammingError exception is raised if no SQL has been executed
         or if it did not return a result set (e.g. was not a SELECT statement)
         """
-        fut = self._run_operation(self._impl.fetchall)
+        fut: Coroutine = self._run_operation(self._impl.fetchall)
         return fut
 
-    def fetchmany(self, size):
+    def fetchmany(self, size) -> Coroutine:
         """Returns a list of remaining rows, containing no more than size
         rows, used to process results in chunks. The list will be empty when
         there are no more rows.
@@ -187,10 +206,10 @@ class Cursor:
 
         :param size: int, max number of rows to return
         """
-        fut = self._run_operation(self._impl.fetchmany, size)
+        fut: Coroutine = self._run_operation(self._impl.fetchmany, size)
         return fut
 
-    def nextset(self):
+    def nextset(self) -> Coroutine:
         """This method will make the cursor skip to the next available
         set, discarding any remaining rows from the current set.
 
@@ -201,25 +220,25 @@ class Cursor:
         This method is primarily used if you have stored procedures that
         return multiple results.
         """
-        fut = self._run_operation(self._impl.nextset)
+        fut: Coroutine = self._run_operation(self._impl.nextset)
         return fut
 
-    def tables(self, **kw):
+    def tables(self, **kw) -> Coroutine:
         """Creates a result set of tables in the database that match the
         given criteria.
         """
-        fut = self._run_operation(self._impl.tables, **kw)
+        fut: Coroutine = self._run_operation(self._impl.tables, **kw)
         return fut
 
-    def columns(self, **kw):
+    def columns(self, **kw) -> Coroutine:
         """Creates a results set of column names in specified tables by
         executing the ODBC SQLColumns function. Each row fetched has the
         following columns.
         """
-        fut = self._run_operation(self._impl.columns, **kw)
+        fut: Coroutine = self._run_operation(self._impl.columns, **kw)
         return fut
 
-    def statistics(self, catalog=None, schema=None, unique=False, quick=True):
+    def statistics(self, catalog=None, schema=None, unique=False, quick=True) -> Coroutine:
         """Creates a results set of statistics about a single table and
         the indexes associated with the table by executing SQLStatistics.
 
@@ -230,7 +249,7 @@ class Cursor:
         :param quick: if True, CARDINALITY and PAGES are returned  only if
             they are readily available from the server
         """
-        fut = self._run_operation(
+        fut: Coroutine = self._run_operation(
             self._impl.statistics,
             catalog=catalog,
             schema=schema,
@@ -239,11 +258,11 @@ class Cursor:
         )
         return fut
 
-    def rowIdColumns(self, table, catalog=None, schema=None, nullable=True):  # nopep8
+    def rowIdColumns(self, table, catalog=None, schema=None, nullable=True) -> Coroutine:  # nopep8
         """Executes SQLSpecialColumns with SQL_BEST_ROWID which creates a
         result set of columns that uniquely identify a row
         """
-        fut = self._run_operation(
+        fut: Coroutine = self._run_operation(
             self._impl.rowIdColumns,
             table,
             catalog=catalog,
@@ -252,12 +271,12 @@ class Cursor:
         )
         return fut
 
-    def rowVerColumns(self, table, catalog=None, schema=None, nullable=True):  # nopep8
+    def rowVerColumns(self, table, catalog=None, schema=None, nullable=True) -> Coroutine:  # nopep8
         """Executes SQLSpecialColumns with SQL_ROWVER which creates a
         result set of columns that are automatically updated when any
         value in the row is updated.
         """
-        fut = self._run_operation(
+        fut: Coroutine = self._run_operation(
             self._impl.rowVerColumns,
             table,
             catalog=catalog,
@@ -266,62 +285,57 @@ class Cursor:
         )
         return fut
 
-    def primaryKeys(self, table, catalog=None, schema=None):  # nopep8
+    def primaryKeys(self, table, catalog=None, schema=None) -> Coroutine:  # nopep8
         """Creates a result set of column names that make up the primary key
         for a table by executing the SQLPrimaryKeys function."""
-        fut = self._run_operation(self._impl.primaryKeys, table, catalog=catalog, schema=schema)
+        fut: Coroutine = self._run_operation(
+            self._impl.primaryKeys, table, catalog=catalog, schema=schema
+        )
         return fut
 
-    def foreignKeys(self, *a, **kw):  # nopep8
+    def foreignKeys(self, *a, **kw) -> Coroutine:  # nopep8
         """Executes the SQLForeignKeys function and creates a result set
         of column names that are foreign keys in the specified table (columns
         in the specified table that refer to primary keys in other tables)
         or foreign keys in other tables that refer to the primary key in
         the specified table.
         """
-        fut = self._run_operation(self._impl.foreignKeys, *a, **kw)
+        fut: Coroutine = self._run_operation(self._impl.foreignKeys, *a, **kw)
         return fut
 
-    def getTypeInfo(self, sql_type):  # nopep8
+    def getTypeInfo(self, sql_type) -> Coroutine:  # nopep8
         """Executes SQLGetTypeInfo a creates a result set with information
         about the specified data type or all data types supported by the
         ODBC driver if not specified.
         """
-        fut = self._run_operation(self._impl.getTypeInfo, sql_type)
+        fut: Coroutine = self._run_operation(self._impl.getTypeInfo, sql_type)
         return fut
 
-    def procedures(self, *a, **kw):
+    def procedures(self, *a, **kw) -> Coroutine:
         """Executes SQLProcedures and creates a result set of information
         about the procedures in the data source.
         """
-        fut = self._run_operation(self._impl.procedures, *a, **kw)
+        fut: Coroutine = self._run_operation(self._impl.procedures, *a, **kw)
         return fut
 
-    def procedureColumns(self, *a, **kw):  # nopep8
-        fut = self._run_operation(self._impl.procedureColumns, *a, **kw)
+    def procedureColumns(self, *a, **kw) -> Coroutine:  # nopep8
+        fut: Coroutine = self._run_operation(self._impl.procedureColumns, *a, **kw)
         return fut
 
-    def skip(self, count):
-        fut = self._run_operation(self._impl.skip, count)
+    def skip(self, count) -> Coroutine:
+        fut: Coroutine = self._run_operation(self._impl.skip, count)
         return fut
 
-    def commit(self):
-        fut = self._run_operation(self._impl.commit)
+    def commit(self) -> Coroutine:
+        fut: Coroutine = self._run_operation(self._impl.commit)
         return fut
 
-    def rollback(self):
-        fut = self._run_operation(self._impl.rollback)
+    def rollback(self) -> Coroutine:
+        fut: Coroutine = self._run_operation(self._impl.rollback)
         return fut
 
-    if PY_352:
-
-        def __aiter__(self):
-            return self
-
-    else:
-
-        async def __aiter__(self):
-            return self
+    def __aiter__(self) -> "Self":
+        return self
 
     async def __anext__(self):
         ret = await self.fetchone()
@@ -330,8 +344,5 @@ class Cursor:
         else:
             raise StopAsyncIteration
 
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         await self.close()

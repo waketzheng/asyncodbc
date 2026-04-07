@@ -1,4 +1,5 @@
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 from pyodbc import dataSources as _dataSources
 
@@ -9,7 +10,7 @@ __version__ = "0.1.1"
 __all__ = ["connect", "Connection", "create_pool", "Pool", "data_sources"]
 
 
-async def data_sources(executor=None):
+async def data_sources(executor: ThreadPoolExecutor | None = None) -> dict:
     """Returns a dictionary mapping available DSNs to their descriptions.
 
     :param executor: instance of custom ThreadPoolExecutor, if not supplied

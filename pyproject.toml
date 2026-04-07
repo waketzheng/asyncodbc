@@ -18,8 +18,7 @@ documentation = "https://github.com/tortoise/asyncodbc"
 dev = [
     "ruff >=0.14.1",
     "bandit >=1.8.6",
-    # TODO: Add mypy back after typing issues fixed
-    # "mypy >=1.18.2",
+    "mypy >=1.18.2",
 ]
 test = [
     "pytest >=8.4.2",
