@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import asyncio
 import os
 import uuid
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
@@ -40,10 +42,10 @@ async def database():
 
 
 @pytest.fixture
-async def connection_maker(dsn, database) -> AsyncGenerator[Callable[..., "Connection"]]:
+async def connection_maker(dsn, database) -> AsyncGenerator[Callable[..., Awaitable[Connection]]]:
     cleanup = []
 
-    async def make(**kw):
+    async def make(**kw) -> Connection:
         if kw.get("executor") is None:
             executor = ThreadPoolExecutor(max_workers=1)
             kw["executor"] = executor

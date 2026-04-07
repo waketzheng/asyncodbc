@@ -444,16 +444,14 @@ async def test_pool_context_manager2(pool):
 @pytest.mark.asyncio
 async def test_all_context_managers(dsn, executor):
     kw = {"dsn": dsn, "executor": executor}
-    async with asyncodbc.create_pool(**kw) as pool:
-        async with pool.acquire() as conn:
-            async with conn.cursor() as cur:
-                assert not pool.closed
-                assert not conn.closed
-                assert not cur.closed
+    async with asyncodbc.create_pool(**kw) as pool, pool.acquire() as conn, conn.cursor() as cur:
+        assert not pool.closed
+        assert not conn.closed
+        assert not cur.closed
 
-                await cur.execute("SELECT 1")
-                val = await cur.fetchone()
-                assert (1,) == tuple(val)
+        await cur.execute("SELECT 1")
+        val = await cur.fetchone()
+        assert (1,) == tuple(val)
 
     assert pool.closed
     assert conn.closed  # type: ignore[unreachable]
