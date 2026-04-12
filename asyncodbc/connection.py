@@ -4,10 +4,10 @@ import asyncio
 import sys
 import traceback
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import AbstractAsyncContextManager
 from functools import partial
-from typing import TYPE_CHECKING, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 
 import pyodbc
 
@@ -26,14 +26,14 @@ T = TypeVar("T")
 
 def connect(
     *,
-    dsn,
-    autocommit=False,
-    ansi=False,
-    timeout=0,
-    executor=None,
-    echo=False,
-    after_created=None,
-    **kwargs,
+    dsn: str,
+    autocommit: bool = False,
+    ansi: bool = False,
+    timeout: int = 0,
+    executor: Any | None = None,
+    echo: bool = False,
+    after_created: Callable[[pyodbc.Connection], Any] | None = None,
+    **kwargs: Any,
 ) -> _ConnectionContextManager:
     """Accepts an ODBC connection string and returns a new Connection object.
 
@@ -72,14 +72,14 @@ def connect(
 
 async def _connect(
     *,
-    dsn,
-    autocommit=False,
-    ansi=False,
-    timeout=0,
-    executor=None,
-    echo=False,
-    after_created=None,
-    **kwargs,
+    dsn: str,
+    autocommit: bool = False,
+    ansi: bool = False,
+    timeout: int = 0,
+    executor: Any | None = None,
+    echo: bool = False,
+    after_created: Callable[[pyodbc.Connection], Any] | None = None,
+    **kwargs: Any,
 ) -> Connection:
     conn = Connection(
         dsn=dsn,
@@ -106,14 +106,14 @@ class Connection(AbstractAsyncContextManager):
     def __init__(
         self,
         *,
-        dsn,
-        autocommit=False,
-        ansi=None,
-        timeout=0,
-        executor=None,
-        echo=False,
-        after_created=None,
-        **kwargs,
+        dsn: str,
+        autocommit: bool = False,
+        ansi: bool | None = None,
+        timeout: int = 0,
+        executor: Any | None = None,
+        echo: bool = False,
+        after_created: Callable[[pyodbc.Connection], Any] | None = None,
+        **kwargs: Any,
     ) -> None:
         self._executor = executor
         self._loop = asyncio.get_event_loop()
@@ -126,7 +126,7 @@ class Connection(AbstractAsyncContextManager):
         self._dsn = dsn
         self._echo = echo
         self._posthook = after_created
-        self._kwargs = kwargs
+        self._kwargs: dict[str, Any] = kwargs
         self._connected = False
         if self.loop.get_debug():
             self._source_traceback = traceback.extract_stack(sys._getframe(1))
@@ -211,19 +211,19 @@ class Connection(AbstractAsyncContextManager):
         await self._execute(self._conn.close)
         self._conn = None
 
-    def commit(self) -> Future:
+    def commit(self) -> Future[None]:
         """Commit any pending transaction to the database."""
-        fut: Future = self._execute(self.pyodbc_conn.commit)
+        fut: Future[None] = self._execute(self.pyodbc_conn.commit)
         return fut
 
-    def rollback(self) -> Future:
+    def rollback(self) -> Future[None]:
         """Causes the database to roll back to the start of any pending
         transaction.
         """
-        fut: Future = self._execute(self.pyodbc_conn.rollback)
+        fut: Future[None] = self._execute(self.pyodbc_conn.rollback)
         return fut
 
-    async def execute(self, sql, *args) -> Cursor:
+    async def execute(self, sql: str, *args: Any) -> Cursor:
         """Create a new Cursor object, call its execute method, and return it.
 
         See Cursor.execute for more details.This is a convenience method
@@ -245,7 +245,7 @@ class Connection(AbstractAsyncContextManager):
                 await self.close()
             raise
 
-    def getinfo(self, type_) -> Future:
+    def getinfo(self, type_: int) -> Future[Any]:
         """Returns general information about the driver and data source
         associated with a connection by calling SQLGetInfo and returning its
         results. See Microsoft's SQLGetInfo documentation for the types of
@@ -253,10 +253,10 @@ class Connection(AbstractAsyncContextManager):
 
         :param type_: int, pyodbc.SQL_* constant
         """
-        fut: Future = self._execute(self.pyodbc_conn.getinfo, type_)
+        fut: Future[Any] = self._execute(self.pyodbc_conn.getinfo, type_)
         return fut
 
-    def add_output_converter(self, sqltype, func) -> Future[None]:
+    def add_output_converter(self, sqltype: int, func: Callable[[bytes | None], Any]) -> Future[None]:
         """Register an output converter function that will be called whenever
         a value with the given SQL type is read from the database.
 
@@ -305,5 +305,10 @@ class Connection(AbstractAsyncContextManager):
                 context["source_traceback"] = self._source_traceback
             self._loop.call_exception_handler(context)
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any | None,
+    ) -> None:
         await self.close()

@@ -10,7 +10,7 @@ __version__ = "0.1.1"
 __all__ = ["connect", "Connection", "create_pool", "Pool", "data_sources"]
 
 
-async def data_sources(executor: ThreadPoolExecutor | None = None) -> dict:
+async def data_sources(executor: ThreadPoolExecutor | None = None) -> dict[str, str]:
     """Returns a dictionary mapping available DSNs to their descriptions.
 
     :param executor: instance of custom ThreadPoolExecutor, if not supplied

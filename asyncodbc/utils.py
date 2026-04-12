@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Coroutine, Generator, Iterator
+from types import TracebackType
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from pyodbc import Error
@@ -15,7 +16,7 @@ if TYPE_CHECKING:
 # Issue #195.  Don't pollute the pool with bad conns
 # Unfortunately occasionally sqlite will return 'HY000' for invalid query,
 # so we need specialize the check
-_CONN_CLOSE_ERRORS = {
+_CONN_CLOSE_ERRORS: dict[str, str | None] = {
     # [Microsoft][ODBC Driver 17 for SQL Server]Communication link failure
     "08S01": None,
     # [HY000] server closed the connection unexpectedly
@@ -51,7 +52,7 @@ class _ContextManager(Coroutine, Generic[T]):
     def send(self, value: Any) -> Any:
         return self._coro.send(value)
 
-    def throw(self, typ, val=None, tb=None) -> Any:
+    def throw(self, typ: type[BaseException], val: object = None, tb: TracebackType | None = None, /) -> Any:  # type: ignore[override]
         if val is None:
             return self._coro.throw(typ)
         elif tb is None:
@@ -64,15 +65,15 @@ class _ContextManager(Coroutine, Generic[T]):
 
     @property
     def gi_frame(self) -> FrameType | None:
-        return self._coro.gi_frame  # type:ignore[attr-defined]
+        return self._coro.gi_frame  # type: ignore[attr-defined]
 
     @property
     def gi_running(self) -> bool:
-        return self._coro.gi_running  # type:ignore[attr-defined]
+        return self._coro.gi_running  # type: ignore[attr-defined]
 
     @property
-    def gi_code(self) -> CodeType:
-        return self._coro.gi_code  # type:ignore[attr-defined]
+    def gi_code(self) -> CodeType | None:
+        return self._coro.gi_code  # type: ignore[attr-defined]
 
     def __next__(self) -> Any:
         return self.send(None)
@@ -87,13 +88,23 @@ class _ContextManager(Coroutine, Generic[T]):
         self._obj = await self._coro
         return self._obj
 
-    async def __aexit__(self, exc_type, exc, tb) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         await self._obj.close()  # type: ignore[union-attr]
         self._obj = None
 
 
 class _PoolContextManager(_ContextManager["Pool"]):
-    async def __aexit__(self, exc_type, exc, tb) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         self._obj.close()  # type: ignore[union-attr]
         await self._obj.wait_closed()  # type: ignore[union-attr]
         self._obj = None
@@ -112,7 +123,12 @@ class _PoolAcquireContextManager(_ContextManager["Connection"]):
         self._conn = await self._coro
         return self._conn
 
-    async def __aexit__(self, exc_type, exc, tb) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         try:
             if self._pool is not None and self._conn is not None:
                 await self._pool.release(self._conn)
@@ -122,6 +138,11 @@ class _PoolAcquireContextManager(_ContextManager["Connection"]):
 
 
 class _ConnectionContextManager(_ContextManager["Connection"]):
-    async def __aexit__(self, exc_type, exc, tb) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         await self._obj.close()  # type: ignore[union-attr]
         self._obj = None

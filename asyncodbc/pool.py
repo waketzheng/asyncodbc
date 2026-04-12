@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import asyncio
 import collections
-from typing import cast
+from typing import Any, cast
 
 from .connection import Connection, connect
 from .utils import _PoolAcquireContextManager, _PoolContextManager
@@ -9,7 +11,11 @@ __all__ = ["create_pool", "Pool"]
 
 
 def create_pool(
-    minsize=1, maxsize=10, echo=False, pool_recycle=-1, **kwargs
+    minsize: int = 1,
+    maxsize: int = 10,
+    echo: bool = False,
+    pool_recycle: int = -1,
+    **kwargs: Any,
 ) -> _PoolContextManager:
     return _PoolContextManager(
         _create_pool(
@@ -18,8 +24,14 @@ def create_pool(
     )
 
 
-async def _create_pool(minsize=1, maxsize=10, echo=False, pool_recycle=-1, **kwargs) -> "Pool":
-    pool = Pool(minsize=minsize, maxsize=maxsize, echo=echo, pool_recycle=pool_recycle, **kwargs)  # type:ignore
+async def _create_pool(
+    minsize: int = 1,
+    maxsize: int = 10,
+    echo: bool = False,
+    pool_recycle: int = -1,
+    **kwargs: Any,
+) -> Pool:
+    pool = Pool(minsize=minsize, maxsize=maxsize, echo=echo, pool_recycle=pool_recycle, **kwargs)  # type: ignore[abstract]
     if minsize > 0:
         async with pool.cond:
             await pool.fill_free_pool(False)
@@ -30,7 +42,12 @@ class Pool(asyncio.AbstractServer):
     """Connection pool, just from aiomysql"""
 
     def __init__(
-        self, minsize: int, maxsize: int, pool_recycle: int, echo: bool = False, **kwargs
+        self,
+        minsize: int,
+        maxsize: int,
+        pool_recycle: int,
+        echo: bool = False,
+        **kwargs: Any,
     ) -> None:
         if minsize < 0:
             raise ValueError("minsize should be zero or greater")
@@ -38,7 +55,7 @@ class Pool(asyncio.AbstractServer):
             raise ValueError("maxsize should be not less than minsize")
         self._minsize = minsize
         self._loop = asyncio.get_event_loop()
-        self._conn_kwargs = kwargs
+        self._conn_kwargs: dict[str, Any] = kwargs
         self._acquiring = 0
         self._free: collections.deque[Connection] = collections.deque(maxlen=maxsize)
         self._cond = asyncio.Condition()
@@ -105,7 +122,7 @@ class Pool(asyncio.AbstractServer):
 
         for conn in list(self._used):
             # TODO: check that whether conn.close should be run in executor
-            conn.close()  # type:ignore
+            conn.close()  # type: ignore[unused-coroutine]
             self._terminated.add(conn)
 
         self._used.clear()
