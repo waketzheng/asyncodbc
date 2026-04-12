@@ -63,7 +63,7 @@ async def insert_with_values() -> None:
         # Retrieve id of last inserted row
         await cur.execute("SELECT last_insert_rowid();")
         result = await cur.fetchone()
-        print(result[0])
+        print(result[0])  # type: ignore[index]
 
 
 async def commit() -> None:

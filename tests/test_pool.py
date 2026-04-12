@@ -37,7 +37,7 @@ async def test_acquire(pool):
         cur = await conn.cursor()
         await cur.execute("SELECT 1")
         val = await cur.fetchone()
-        assert (1,) == tuple(val)
+        assert (1,) == tuple(val)  # type: ignore[arg-type]
     finally:
         await pool.release(conn)
 
@@ -414,7 +414,7 @@ async def test_pool_with_executor(pool_maker, dsn, executor):
         cur = await conn.cursor()
         await cur.execute("SELECT 1")
         val = await cur.fetchone()
-        assert (1,) == tuple(val)
+        assert (1,) == tuple(val)  # type: ignore[arg-type]
     finally:
         await pool.release(conn)
     # we close pool here instead in finalizer because of pool should be
@@ -451,7 +451,7 @@ async def test_all_context_managers(dsn, executor):
 
         await cur.execute("SELECT 1")
         val = await cur.fetchone()
-        assert (1,) == tuple(val)
+        assert (1,) == tuple(val)  # type: ignore[arg-type]
 
     assert pool.closed
     assert conn.closed  # type: ignore[unreachable]
@@ -468,7 +468,7 @@ async def test_context_manager_aexit(connection_maker):
             await cur.execute("INSERT INTO cmt VALUES (?,?)", params)
         async with conn.cursor() as cur:
             await cur.execute("SELECT v FROM cmt WHERE n=1;")
-            (value,) = await cur.fetchone()
+            (value,) = await cur.fetchone()  # type: ignore[misc]
             assert value == params[1]
 
         # rollback on exit if error

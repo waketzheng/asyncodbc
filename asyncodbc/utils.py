@@ -52,7 +52,9 @@ class _ContextManager(Coroutine, Generic[T]):
     def send(self, value: Any) -> Any:
         return self._coro.send(value)
 
-    def throw(self, typ: type[BaseException], val: object = None, tb: TracebackType | None = None, /) -> Any:  # type: ignore[override]
+    def throw(  # type: ignore[override]
+        self, typ: type[BaseException], val: object = None, tb: TracebackType | None = None, /
+    ) -> Any:
         if val is None:
             return self._coro.throw(typ)
         elif tb is None:

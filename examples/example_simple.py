@@ -14,7 +14,7 @@ async def example() -> None:
     rows = await cur.fetchall()
     print(rows)
     print(rows[0])
-    print(rows[0].age)
+    print(rows[0].age)  # type: ignore[attr-defined]
     await cur.close()
     await conn.close()
 

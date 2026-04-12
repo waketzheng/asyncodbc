@@ -10,7 +10,7 @@ async def example() -> None:
         await cur.execute("SELECT 42 AS age;")
         val = await cur.fetchone()
         print(val)
-        print(val.age)
+        print(val.age)  # type: ignore[union-attr]
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Coroutine, Sequence
 from contextlib import AbstractAsyncContextManager
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeAlias, TypeVar
 
 import pyodbc
 
@@ -25,6 +25,10 @@ __all__ = ["Cursor"]
 T = TypeVar("T")
 SyncFunc = Callable[..., T]
 
+ColumnDescription: TypeAlias = tuple[
+    str, type, int | None, int | None, int | None, int | None, bool | None
+]
+
 
 class Cursor(AbstractAsyncContextManager):
     """Cursors represent a database cursor (and map to ODBC HSTMTs), which
@@ -35,7 +39,9 @@ class Cursor(AbstractAsyncContextManager):
     the other cursors.
     """
 
-    def __init__(self, pyodbc_cursor: pyodbc.Cursor, connection: Connection, echo: bool = False) -> None:
+    def __init__(
+        self, pyodbc_cursor: pyodbc.Cursor, connection: Connection, echo: bool = False
+    ) -> None:
         self._conn: Connection | None = connection
         self._impl: pyodbc.Cursor = pyodbc_cursor
         self._loop = connection.loop
@@ -87,7 +93,7 @@ class Cursor(AbstractAsyncContextManager):
         return self._impl.rowcount
 
     @property
-    def description(self) -> list[tuple[str, type, int | None, int | None, int | None, int | None, bool | None]] | None:
+    def description(self) -> list[ColumnDescription] | None:
         """This read-only attribute is a list of 7-item tuples, each
         containing (name, type_code, display_size, internal_size, precision,
         scale, null_ok).
@@ -304,9 +310,7 @@ class Cursor(AbstractAsyncContextManager):
     ) -> Coroutine[Any, Any, Any]:  # nopep8
         """Creates a result set of column names that make up the primary key
         for a table by executing the SQLPrimaryKeys function."""
-        return self._run_operation(
-            self._impl.primaryKeys, table, catalog=catalog, schema=schema
-        )
+        return self._run_operation(self._impl.primaryKeys, table, catalog=catalog, schema=schema)
 
     def foreignKeys(self, *a: Any, **kw: Any) -> Coroutine[Any, Any, Any]:  # nopep8
         """Executes the SQLForeignKeys function and creates a result set

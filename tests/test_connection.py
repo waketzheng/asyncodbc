@@ -123,7 +123,7 @@ async def test_custom_executor(dsn, executor):
     )
     assert conn._executor is executor
     cur = await conn.execute("SELECT 10;")
-    (resp,) = await cur.fetchone()
+    (resp,) = await cur.fetchone()  # type: ignore[misc]
     await conn.close()
     assert resp == 10
     assert conn.closed
@@ -152,7 +152,7 @@ async def test_connect_context_manager(dsn):
 
         cur = await conn.execute("SELECT 10;")
         assert cur.echo
-        (resp,) = await cur.fetchone()
+        (resp,) = await cur.fetchone()  # type: ignore[misc]
         assert resp == 10
         await cur.close()
 

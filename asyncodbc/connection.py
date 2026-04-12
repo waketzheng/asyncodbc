@@ -4,7 +4,7 @@ import asyncio
 import sys
 import traceback
 import warnings
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from functools import partial
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
@@ -256,7 +256,9 @@ class Connection(AbstractAsyncContextManager):
         fut: Future[Any] = self._execute(self.pyodbc_conn.getinfo, type_)
         return fut
 
-    def add_output_converter(self, sqltype: int, func: Callable[[bytes | None], Any]) -> Future[None]:
+    def add_output_converter(
+        self, sqltype: int, func: Callable[[bytes | None], Any]
+    ) -> Future[None]:
         """Register an output converter function that will be called whenever
         a value with the given SQL type is read from the database.
 

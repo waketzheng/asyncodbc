@@ -31,9 +31,14 @@ def event_loop() -> AbstractEventLoop:
     return asyncio.get_event_loop()
 
 
+@pytest.fixture
+def dsn():
+    return os.getenv("TEST_DSN", "")
+
+
 @pytest_asyncio.fixture(scope="session", autouse=True)
-async def database():
-    connection = await asyncodbc.connect(dsn=os.getenv("TEST_DSN"), autocommit=True)
+async def database(dsn):
+    connection = await asyncodbc.connect(dsn=dsn, autocommit=True)
     db = f"test_{uuid.uuid4()}".replace("-", "")
     await connection.execute(f"CREATE DATABASE {db};")
     yield db
@@ -73,11 +78,6 @@ async def pool(dsn):
     finally:
         p.close()
         await p.wait_closed()
-
-
-@pytest.fixture
-def dsn():
-    return os.getenv("TEST_DSN")
 
 
 @pytest_asyncio.fixture
